@@ -104,6 +104,11 @@ AsciiDoc:
   sanitizer removes `data-line-start` and `data-line-end` that come from
   the file, so passthrough HTML cannot fake the lines (and hide the green
   background of an added block).
+- The HTML converter gives no class to a table row, so the plugin sets the
+  line attributes of each `<tr>` after sanitizing. A row starts at the line
+  of its first cell and ends where the next row starts. The last row ends
+  with the table. In a CSV or DSV table, Asciidoctor gives the first cell
+  of a row the line of the previous row. These tables keep one range.
 - Asciidoctor adds about 360 KB to the bundle (100 KB gzipped). A dynamic
   `import()` runs its code only when a reviewer opens an AsciiDoc file.
 
@@ -161,7 +166,8 @@ line (attribute `data-added`, which the AsciiDoc sanitizer removes from
 file content, so that a file cannot fake it). The `content` param (the diff
 data) gives these lines: the `b` lines of each chunk, except in a `common`
 chunk, which differs only in ignored whitespace. Only the innermost blocks
-get the color, so that one added line does not color a whole section. For
+get the color, so that one added line does not color a whole section or
+table (a table row is a block, in Markdown and in AsciiDoc). For
 an outer block, its own lines before its first inner block (an AsciiDoc
 section title) color its first element. The colors update when the base
 patchset changes.

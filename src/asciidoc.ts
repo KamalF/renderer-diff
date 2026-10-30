@@ -9,12 +9,24 @@ function isDescendant(node: AbstractBlock, ancestor: AbstractBlock): boolean {
   return false;
 }
 
+// The Table type of Asciidoctor is not exported.
+type TableBlock = AbstractBlock & {
+  rows: {bySection(): [string, AbstractBlock[][]][]};
+};
+
 // Asciidoctor gives the start line of each block, but not the end line. A
 // block ends where the next block that it does not contain starts. The
 // converter keeps a role in the class attribute of the block element. The
 // role has a random token, so that passthrough HTML in the file cannot fake
 // it, and the plugin changes it to line attributes after sanitizing.
-async function convertWithLines(source: string, token: string): Promise<string> {
+//
+// The converter gives no class to a table row. The returned map gives the
+// row bounds of each table, by the start line of the table (see
+// setRowLines).
+async function convertWithLines(
+  source: string,
+  token: string
+): Promise<{html: string; rows: Map<number, number[]>}> {
   const doc = await load(source, {
     safe: 'secure',
     sourcemap: true,
@@ -35,6 +47,7 @@ async function convertWithLines(source: string, token: string): Promise<string> 
     }
     return start;
   });
+  const rows = new Map<number, number[]>();
   blocks.forEach((block, i) => {
     const start = starts[i];
     const next = blocks.findIndex(
@@ -45,8 +58,17 @@ async function convertWithLines(source: string, token: string): Promise<string> 
     // The HTML converter drops the [mermaid] style. Keep it as a class, so
     // that the pane finds the diagram.
     if (block.getStyle() === 'mermaid') block.addRole('mermaid');
+    // A row starts at the line of its first cell. In a CSV or DSV table,
+    // Asciidoctor gives that cell the line of the previous row, so these
+    // tables keep one range.
+    if (block.getContext() === 'table' && block.getAttribute('format', 'psv') === 'psv') {
+      const rowStarts = (block as TableBlock).rows
+        .bySection()
+        .flatMap(([, section]) => section.map(row => row[0].getLineNumber()!));
+      rows.set(start, [...rowStarts, end]);
+    }
   });
-  return doc.convert();
+  return {html: await doc.convert(), rows};
 }
 
 function setLines(root: DocumentFragment, token: string) {
@@ -61,6 +83,18 @@ function setLines(root: DocumentFragment, token: string) {
       element.setAttribute('data-line-end', match[2]);
       break;
     }
+  }
+}
+
+// A row ends where the next row starts. The last row ends with the table.
+function setRowLines(root: DocumentFragment, rows: Map<number, number[]>) {
+  for (const table of root.querySelectorAll<HTMLElement>('table[data-line-start]')) {
+    const bounds = rows.get(Number(table.dataset['lineStart']));
+    if (!bounds) continue;
+    table.querySelectorAll(':scope > * > tr').forEach((tr, i) => {
+      tr.setAttribute('data-line-start', String(bounds[i]));
+      tr.setAttribute('data-line-end', String(bounds[i + 1]));
+    });
   }
 }
 
@@ -86,11 +120,13 @@ const PURIFY_CONFIG = {
 
 export async function renderAsciidoc(source: string): Promise<string> {
   const token = `rd-${crypto.randomUUID()}`;
-  const fragment = DOMPurify.sanitize(await convertWithLines(source, token), {
+  const {html, rows} = await convertWithLines(source, token);
+  const fragment = DOMPurify.sanitize(html, {
     ...PURIFY_CONFIG,
     RETURN_DOM_FRAGMENT: true,
   });
   setLines(fragment, token);
+  setRowLines(fragment, rows);
   for (const img of fragment.querySelectorAll('img')) {
     const src = img.getAttribute('src') ?? '';
     if (isLoadableImage(src)) continue;

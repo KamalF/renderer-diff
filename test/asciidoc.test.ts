@@ -31,6 +31,19 @@ describe('renderAsciidoc', () => {
     expect(html).toContain('class="listingblock" data-line-start="13" data-line-end="17"');
   });
 
+  test('adds source lines to table rows, the end at the next row', async () => {
+    const html = await renderAsciidoc('[cols=2]\n|===\n| A | B\n\n| 1 | 2\n| 3\n| 4\n|===\n\nafter\n');
+    expect(html).toContain('data-line-start="1" data-line-end="10"');
+    const rows = [...html.matchAll(/<tr data-line-start="(\d+)" data-line-end="(\d+)"/g)];
+    expect(rows.map(m => [Number(m[1]), Number(m[2])])).toEqual([[3, 5], [5, 6], [6, 10]]);
+  });
+
+  test('keeps one range for a CSV table', async () => {
+    const html = await renderAsciidoc(',===\nA,B\n\n1,2\n3,4\n,===\n');
+    expect(html).toContain('data-line-start="1" data-line-end="7"');
+    expect(html).not.toContain('<tr data-line-start');
+  });
+
   test('ignores line attributes in passthrough HTML', async () => {
     const html = await renderAsciidoc(
       'Text pass:[<span data-line-start="1" data-line-end="1" class="rd-line-1-1">x</span>]\n'

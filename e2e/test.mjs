@@ -132,15 +132,17 @@ async function rowTop(line) {
   return (await row.count()) ? (await row.boundingBox())?.y : undefined;
 }
 
-// The pane width, its top edge, and the innermost block at that edge.
-function paneState() {
-  return pane.evaluate(p => {
+// The pane width, its top edge, and the innermost block at the reference
+// line, `offset` pixels below that edge.
+function paneState(offset = 0) {
+  return pane.evaluate((p, offset) => {
     const scroller = p.closest('.sidebarContents');
     const top = scroller.getBoundingClientRect().top;
+    const y = top + offset + 1;
     let block;
     for (const el of p.shadowRoot.querySelectorAll('[data-line-start]')) {
       const r = el.getBoundingClientRect();
-      if (r.top <= top + 1 && r.bottom > top + 1) block = el;
+      if (r.top <= y && r.bottom > y) block = el;
     }
     return {
       width: scroller.getBoundingClientRect().width,
@@ -148,12 +150,12 @@ function paneState() {
       start: Number(block?.dataset.lineStart),
       end: Number(block?.dataset.lineEnd),
     };
-  });
+  }, offset);
 }
 
-// The first diff line below the top edge of the pane. A short diff cannot
-// scroll its first line up to the edge.
-function diffLineAtTop(top) {
+// The first diff line below `y`. A short diff cannot scroll its first line
+// up to the top edge of the pane.
+function diffLineAt(y) {
   return page.locator('td.lineNum.right[data-value]').evaluateAll((cells, y) => {
     for (const c of cells) {
       const r = c.getBoundingClientRect();
@@ -161,16 +163,16 @@ function diffLineAtTop(top) {
       if (line > 0 && r.height && r.bottom > y) return line;
     }
     return undefined;
-  }, top + 1);
+  }, y + 1);
 }
 
-// The block at the top of the pane must contain the diff line at the top
-// edge. If that line is blank, the pane shows the next block.
-async function checkAligned(name) {
+// The block at the reference line of the pane must contain the diff line at
+// the same height. If that line is blank, the pane shows the next block.
+async function checkAligned(name, offset = 0) {
   await frames();
   await frames();
-  const state = await paneState();
-  const line = await diffLineAtTop(state.top);
+  const state = await paneState(offset);
+  const line = await diffLineAt(state.top + offset);
   check(
     name,
     line !== undefined && state.start - 1 <= line && line <= state.end,
@@ -291,6 +293,31 @@ check(
   `added=${addedBlocks.join()}`
 );
 await page.screenshot({path: `${shots}/6-collapsed.png`});
+
+// A click on a diff row aligns the pane with that row, and the reference
+// line stays at that height. Line 238 is in the hunk of line 233. With it at the
+// top, the hunk of the changed line shows below it in the diff, but not in
+// the pane.
+await scrollDiffTo(238);
+await frames();
+const anchor = (await rowTop(CHANGED_LINE)) - (await paneState()).top;
+state = await paneState(anchor);
+check(
+  'before the click, the pane does not show the clicked line',
+  !(state.start <= CHANGED_LINE && CHANGED_LINE < state.end),
+  `anchor=${anchor} pane block=${state.start}-${state.end}`
+);
+await page
+  .locator('tr.diff-row', {has: page.locator(`td.lineNum.right[data-value="${CHANGED_LINE}"]`)})
+  .locator('td.content')
+  .first()
+  .click();
+await checkAligned('click on a diff row aligns the pane with it', anchor);
+await page.evaluate(() => window.scrollBy(0, -100));
+await checkAligned('diff scroll keeps the reference line at the row height', anchor);
+await scrollPane(100);
+await checkAligned('pane scroll keeps the reference line at the row height', anchor);
+await page.screenshot({path: `${shots}/6-collapsed-click.png`});
 
 // AsciiDoc: patchset 5 adds doc.adoc.
 await page.goto(`${url}/c/test/+/${id}/5/doc.adoc`);

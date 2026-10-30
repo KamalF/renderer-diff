@@ -183,8 +183,18 @@ references use.
 
 ## Scroll sync
 
-The reference line is the top edge of the pane, which is just below the
-sticky header.
+The reference line is a horizontal line across the diff and the pane. Both
+sides show the same source line at this height. At first, it is the top
+edge of the pane, which is just below the sticky header.
+
+The diff collapses common lines, so it can show distant parts of the file
+together. At one height, the pane shows only one of them. A click in a diff
+row (`tr.diff-row`) moves the reference line to the top of that row. The
+click can be on the code, on the line number, or on a comment thread of the
+line. The pane then scrolls to show the line at the height of the row. The
+reference line stays at this height for the next scrolls, until the next
+click. On another file, the reference line goes back to the top edge of the
+pane.
 
 Diff to pane, on each window scroll:
 
@@ -192,12 +202,13 @@ Diff to pane, on each window scroll:
    the diff that is below the reference line. Get its line number `L`.
 2. Find the rendered block that contains `L`. If no block contains `L`, use
    the next block after `L`.
-3. Scroll the pane so that the position of `L` in that block is at the top.
-   Interpolate inside the block with `(L - start) / (end - start)`.
+3. Scroll the pane so that the position of `L` in that block is at the
+   reference line. Interpolate inside the block with
+   `(L - start) / (end - start)`.
 
 Pane to diff, on each scroll of the pane by the user:
 
-1. Find the block at the top of the pane, and the source line `L` at that
+1. Find the block at the reference line, and the source line `L` at that
    position (inverse of the interpolation).
 2. Find the diff row with line `L`. If Gerrit hides that line (collapsed
    common lines), use the nearest row that it shows.

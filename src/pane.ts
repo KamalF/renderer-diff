@@ -89,6 +89,11 @@ export class RendererDiffPane extends LitElement {
   // that such a scroll fires must not sync back to the other side.
   private expectedWindowY?: number;
   private expectedPaneTop?: number;
+  // The reference line of the sync, in pixels below the top edge of the
+  // pane. A click on a diff row moves it to the top of that row. The diff
+  // collapses common lines, so it can show distant parts of the file
+  // together. The pane can align only one of them with its top edge.
+  private anchor = 0;
   private readonly onWindowResize = () => this.updateWidth();
   // Observe the gr-diff element to find its table when Gerrit renders it.
   // Observe the table to follow a change of view mode or of preference.
@@ -191,12 +196,14 @@ export class RendererDiffPane extends LitElement {
     this.scroller?.addEventListener('scroll', this.onPaneScroll);
     window.addEventListener('scroll', this.onWindowScroll);
     window.addEventListener('resize', this.onWindowResize);
+    window.addEventListener('click', this.onWindowClick);
   }
 
   override disconnectedCallback() {
     this.scroller?.removeEventListener('scroll', this.onPaneScroll);
     window.removeEventListener('scroll', this.onWindowScroll);
     window.removeEventListener('resize', this.onWindowResize);
+    window.removeEventListener('click', this.onWindowClick);
     this.resizeObserver.disconnect();
     this.contentObserver.disconnect();
     if (this.frame !== undefined) cancelAnimationFrame(this.frame);
@@ -277,6 +284,7 @@ export class RendererDiffPane extends LitElement {
     this.rendered = undefined;
     this.message = undefined;
     this.blockCache = undefined;
+    this.anchor = 0;
     const result = await this.fetchRendered();
     // The reviewer can go to another file while the request runs.
     if (load !== this.current || !result) return;
@@ -349,6 +357,25 @@ export class RendererDiffPane extends LitElement {
       this.scroller.getBoundingClientRect().top;
   };
 
+  // A click anywhere in a diff row: the code, the line number, or a comment
+  // thread of the line.
+  private readonly onWindowClick = (event: MouseEvent) => {
+    const path = event.composedPath();
+    if (!this.scroller || !this.diff || !path.includes(this.diff)) return;
+    const row = path.find(
+      (e): e is HTMLTableRowElement =>
+        e instanceof HTMLTableRowElement && e.classList.contains('diff-row')
+    );
+    if (!row) return;
+    // A tall row can start above the pane, under the sticky header.
+    this.anchor = Math.max(
+      0,
+      row.getBoundingClientRect().top -
+        this.scroller.getBoundingClientRect().top
+    );
+    this.syncFromDiff();
+  };
+
   private readonly onWindowScroll = () => {
     if (this.isExpected(window.scrollY, 'expectedWindowY')) return;
     this.schedule(() => this.syncFromDiff());
@@ -380,9 +407,17 @@ export class RendererDiffPane extends LitElement {
   private syncFromDiff() {
     const scroller = this.scroller;
     if (!scroller || this.rendered === undefined) return;
-    const line = lineAtY(this.rows(), scroller.getBoundingClientRect().top);
+    const line = lineAtY(
+      this.rows(),
+      scroller.getBoundingClientRect().top + this.anchor
+    );
     if (line === undefined) return;
-    const target = Math.round(lineToOffset(this.blocks(), line));
+    // Near the start of the file, the target can be negative. Clamp it, so
+    // that a pane already at its start does not scroll.
+    const target = Math.max(
+      0,
+      Math.round(lineToOffset(this.blocks(), line) - this.anchor)
+    );
     if (Math.abs(scroller.scrollTop - target) < 1) return;
     scroller.scrollTop = target;
     // Read back the position: the browser clamps it at the end of the pane.
@@ -392,10 +427,10 @@ export class RendererDiffPane extends LitElement {
   private syncFromPane() {
     const scroller = this.scroller;
     if (!scroller || this.rendered === undefined) return;
-    const line = offsetToLine(this.blocks(), scroller.scrollTop);
+    const line = offsetToLine(this.blocks(), scroller.scrollTop + this.anchor);
     const y = yOfLine(this.rows(), line);
     if (y === undefined) return;
-    const delta = y - scroller.getBoundingClientRect().top;
+    const delta = y - scroller.getBoundingClientRect().top - this.anchor;
     if (Math.abs(delta) < 1) return;
     window.scrollTo({top: window.scrollY + delta, behavior: 'instant'});
     this.expectedWindowY = window.scrollY;

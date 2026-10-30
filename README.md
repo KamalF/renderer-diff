@@ -31,6 +31,11 @@ Blocks with added or changed lines have a green background. A link to a
 section of the file (`[text](#heading)` in Markdown, `<<id>>` in AsciiDoc)
 scrolls the pane to that section, and the diff follows.
 
+The diff collapses common lines, so it can show distant parts of the file
+together. Click a row of the diff: the pane shows the rendered line at the
+height of the row. When you scroll, the two sides stay aligned at this
+height, until you click another row or open another file.
+
 Mermaid diagrams render in Markdown (a code fence with `mermaid`) and in
 AsciiDoc (`[mermaid]` or `[source,mermaid]` blocks).
 

@@ -224,10 +224,10 @@ check(
 await page.screenshot({path: `${shots}/1-side-by-side.png`});
 await pane.frameLocator('iframe.mermaid-diagram').locator('svg').waitFor();
 check('Markdown: Mermaid diagram renders', await pane.locator('iframe.mermaid-diagram').isVisible());
-// Patchset 2 adds the whole file, so the diagram is green too.
+// Patchset 2 adds the whole file, so no block is green.
 check(
-  'Markdown: added diagram is green',
-  await pane.locator('iframe.mermaid-diagram').evaluate(f => f.hasAttribute('data-added'))
+  'new file: no block is green',
+  (await pane.evaluate(p => p.shadowRoot.querySelectorAll('[data-added]').length)) === 0
 );
 
 await scrollDiffTo(PARAGRAPH_4);

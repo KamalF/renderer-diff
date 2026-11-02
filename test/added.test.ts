@@ -20,6 +20,11 @@ describe('addedLines', () => {
     expect([...addedLines(diff as never)]).toEqual([3, 4, 15]);
   });
 
+  test('returns an empty set if the diff has no common line', () => {
+    expect(addedLines({content: [{b: ['1', '2']}]} as never).size).toBe(0);
+    expect(addedLines({content: [{a: ['old'], b: ['1', '2']}]} as never).size).toBe(0);
+  });
+
   test('returns an empty set without a diff', () => {
     expect(addedLines(undefined).size).toBe(0);
   });

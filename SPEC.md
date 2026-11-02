@@ -172,6 +172,10 @@ an outer block, its own lines before its first inner block (an AsciiDoc
 section title) color its first element. The colors update when the base
 patchset changes.
 
+If the diff has no common line (a new file, or a file that the change
+replaces), no block gets the color. A green background on the whole file
+tells nothing.
+
 ## Links in the file
 
 A click on a link to `#id` scrolls the pane to the element with this id,

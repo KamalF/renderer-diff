@@ -1,6 +1,10 @@
 import type {DiffInfo} from '@gerritcodereview/typescript-api/diff';
 
-/** The lines of the new revision that the diff adds or changes. */
+/**
+ * The lines of the new revision that the diff adds or changes. If the diff
+ * has no common line (a new file), the set is empty: a green background on
+ * the whole file tells nothing.
+ */
 export function addedLines(diff: DiffInfo | undefined): Set<number> {
   const added = new Set<number>();
   let line = 1;
@@ -12,6 +16,7 @@ export function addedLines(diff: DiffInfo | undefined): Set<number> {
       line++;
     }
   }
+  if (added.size === line - 1) added.clear();
   return added;
 }
 

@@ -27,7 +27,8 @@ loads it from `/static/` when a file has a diagram.
 The pane stays open for the next files of these types, until you click
 **Hide rendered**. On other files, the button and the pane do not show.
 
-Blocks with added or changed lines have a green background. A link to a
+Blocks with added or changed lines have a green background. If the diff
+has no common line (a new file), no block is green. A link to a
 section of the file (`[text](#heading)` in Markdown, `<<id>>` in AsciiDoc)
 scrolls the pane to that section, and the diff follows.
 

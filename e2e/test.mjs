@@ -102,7 +102,7 @@ const EVIL = [
 
 // Patchset 1 is the empty change. Patchset 2 adds doc.md, patchset 3
 // changes 3 lines of it, patchset 4 adds main.c, patchset 5 adds doc.adoc,
-// and patchset 6 adds evil.md.
+// patchset 6 adds evil.md, and patchset 7 deletes it.
 await rest('PUT', '/projects/test', {create_empty_commit: true});
 const {_number: id} = await rest('POST', '/changes/', {
   project: 'test',
@@ -120,6 +120,8 @@ for (const [path, content] of edits) {
   await rest('PUT', `/changes/${id}/edit/${path}`, content, 'application/octet-stream');
   await rest('POST', `/changes/${id}/edit:publish`, {notify: 'NONE'});
 }
+await rest('DELETE', `/changes/${id}/edit/evil.md`, {});
+await rest('POST', `/changes/${id}/edit:publish`, {notify: 'NONE'});
 
 const trigger = page.locator('renderer-diff-trigger gr-button');
 const pane = page.locator('renderer-diff-pane');
@@ -374,6 +376,21 @@ await page.waitForTimeout(1000);
 check('evil.md: Mermaid loads once for all diagrams', mermaidLoads.length === 1, `loads=${mermaidLoads.length}`);
 check('evil.md: no request to the URLs in the file', evilRequests.length === 0, evilRequests.join(' '));
 await page.screenshot({path: `${shots}/8-evil.png`});
+
+// A deleted file has no content in the patchset. The pane shows a message,
+// and Gerrit shows no error dialog.
+await page.goto(`${url}/c/test/+/${id}/6..7/evil.md`);
+await pane.locator('.message').filter({hasNotText: 'Loading'}).waitFor();
+check(
+  'deleted file: pane shows a message',
+  (await pane.locator('.message').textContent()) === 'The file does not exist in this patchset.'
+);
+await page.waitForTimeout(1000);
+check(
+  'deleted file: no error dialog',
+  !(await page.locator('dialog#errorModal').evaluate(d => d.open))
+);
+await page.screenshot({path: `${shots}/9-deleted.png`});
 
 // In-view navigation: Gerrit keeps the diff view and changes its path.
 // Files of patchset 5: doc.adoc, doc.md, main.c.

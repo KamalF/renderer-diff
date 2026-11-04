@@ -315,12 +315,18 @@ export class RendererDiffPane extends LitElement {
     const url =
       `/changes/${encodeURIComponent(change.project)}~${change._number}` +
       `/revisions/${patchNum}/files/${encodeURIComponent(path)}/content`;
-    let response: Response;
+    let response: Response | void;
     try {
-      response = await plugin.restApi().fetch(HttpMethod.GET, url);
+      // Without an error callback, Gerrit shows an error dialog for an
+      // HTTP error, for example a 404 on a file that the patchset deletes.
+      // The pane shows its own message instead.
+      response = await plugin
+        .restApi()
+        .fetch(HttpMethod.GET, url, undefined, () => {});
     } catch (e) {
       return {message: `Cannot load the file: ${e}`};
     }
+    if (!response) return {message: 'Cannot load the file.'};
     if (response.status === 404) {
       return {message: 'The file does not exist in this patchset.'};
     }
